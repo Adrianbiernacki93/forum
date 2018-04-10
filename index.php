@@ -1,32 +1,58 @@
-<!DOCTYPE html>
 <?php
+session_start();
 require_once "connection.php";
-
-(isset($_GET['id'])) ? $id = $_GET['id'] : $id = 1;
+    $id = 1;
+    
+if(isset($_GET['id']) && preg_match('/^[1-3]$/',$_GET['id'])) {
+    $id = $_GET['id']; 
+    $_SESSION['lastValidId'] = $id;
+    $_SESSION['lastValidId'] = $_GET['id'];
+}else
+{
+    if(isset($_SESSION['lastValidId']))
+    {
+    header ("location: index.php?id={$_SESSION['lastValidId']}");
+    } else
+    {
+        header ("location: index.php?id={$id}");
+    }
+} 
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add'])) {
-        if ($_POST['nameUser'] != '' && $_POST['text'] != '') {
-            $name = $_POST['nameUser'];
-            $text = $_POST['text'];
-            $conn->query("INSERT INTO comments(idsection,user,content) VALUES ({$id},'{$name}','{$text}')");
-        } else {
-            $empty = "The field cannot be empty";
-        }
+        
+        $userName = htmlentities($_POST['nameUser'],ENT_QUOTES,"UTF-8");
+        $text = htmlentities($_POST['text'],ENT_QUOTES,"UTF-8");
+        
+        ($userName == '') ? $emptyName= "The field cannot be empty" : '';
+        ($text == '') ? $emptyContent= "The field cannot be empty" : '';
+        
+        if ($userName != '' && $text != '') {
+            
+            $statement = $conn->prepare('INSERT INTO comments(idsection,user,content) VALUES ( :id, :name, :text)');
+            $statement -> bindParam(':id',$id);
+            $statement -> bindParam(':name', $userName);
+            $statement -> bindParam(':text', $text);
+            $statement -> execute();
+            
+            } 
     }
 
-    $count = ("SELECT MAX(id) FROM comments WHERE idsection={$id}");
-    $statement = $conn->prepare($count);
-    $statement->execute();
+    $statement = $conn->prepare('SELECT MAX(id) FROM comments WHERE idsection= :id');
+    $statement -> bindParam(':id',$id);
+    $statement -> execute();
     $length = $statement->fetchColumn();
 
     for ($x = 0; $x <= $length; $x++) {
         if (isset($_POST[$x])) {
-            $conn->query("delete from comments where id={$x}");
+            $statement = $conn->prepare('delete from comments where id= :id');
+            $statement -> bindParam(':id', $x);
+            $statement -> execute();
         }
     }
 }
 ?>
+<!DOCTYPE html>
 <html>
     <head>
         <meta charset="UTF-8">
@@ -36,12 +62,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <body>
 
         <?php
-        $sql = "SELECT * from topic";
-        $result = $conn->query($sql);
-        if ($result->rowCount() > 0) {
+
+        $statement = $conn->prepare('SELECT * from topic');
+        $statement -> execute();
+        $count = $statement -> rowCount();
+        if ($count > 0) {
             echo "<nav>";
             echo "<ul>";
-            while ($row = $result->fetch()) {
+            while ($row = $statement->fetch()) {
                 echo "<li><a href=index.php?id=" . $row['id'] . ">" . $row['heading'] . "</a></li>";
             }
             echo "</ul>";
@@ -52,9 +80,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <main>
         <header>
             <?php
-            $sql = "SELECT heading,content from topic where id= {$id}";
-            $result = $conn->query($sql);
-            $row = $result->fetch();
+          
+            $statement = $conn -> prepare('SELECT heading,content from topic where id= :id');
+            $statement -> bindValue(':id', $id);
+            $statement -> execute();
+            $row = $statement->fetch();
             ?>
             <h2><?php echo $row['heading'] ?></h2>
 
@@ -65,11 +95,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     </main>
 
     <?php
-    $sql = "SELECT * FROM comments where idsection={$id}";
-    $result = $conn->query($sql);
-
-    if ($result->rowCount() > 0) {
-        while ($row = $result->fetch()) {
+    $statement = $conn->prepare('SELECT * FROM comments where idsection= :id');
+    $statement -> bindValue(':id', $id);
+    $statement -> execute();
+    $result = $statement -> rowCount();
+    if ($result > 0) {
+        while ($row = $statement->fetch()) {
 
             echo <<< END
         <article>
@@ -101,9 +132,7 @@ END;
                 <form method="post">
                     <input type="text" name="nameUser" placeholder="Nick">
                     <span><?php
-    if (isset($empty)) {
-        echo $empty;
-    }
+    if (isset($emptyName)) {echo $emptyName;}
     ?>
                     </span>
             </h4>
@@ -111,9 +140,7 @@ END;
         <div class="commentContent">
             <textarea placeholder="content of the commentary.." name="text"></textarea>
             <span><?php
-                if (isset($empty)) {
-                    echo $empty;
-                }
+                if (isset($emptyContent)) { echo $emptyContent; }
                 ?></span>
             <input type="submit" value="Add" name="add">
             </form>
