@@ -5,10 +5,9 @@ require_once "connection.php";
     
 if(isset($_GET['id']) && preg_match('/^[1-3]$/',$_GET['id'])) {
     $id = $_GET['id']; 
-    $_SESSION['lastValidId'] = $id;
     $_SESSION['lastValidId'] = $_GET['id'];
 }else
-{
+{ 
     if(isset($_SESSION['lastValidId']))
     {
     header ("location: index.php?id={$_SESSION['lastValidId']}");
